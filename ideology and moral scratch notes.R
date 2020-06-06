@@ -2,8 +2,8 @@ install.packages("ROAuth")
 library(ROAuth)
 install.packages("twitteR")
 library(twitteR)
-setup_twitter_oauth("MitZ8CpsxQeeASr14J2mf5kE1", "cXXoOIw3SEx2EV0D5SAZbdDff9jgIhOb8mS4W67nMzcS9F9zVZ",
-                    "1264943028478849029-7K7p01qyfBVY1JwdltQ2HQ50mXib2D", "6gWPVfHFqkrHWxndGo0thNhtMnOxQngS8IwudxJjnqbG5")
+setup_twitter_oauth("IN SNIPPETS OR CSV", "IN SNIPPETS OR CSV",
+                    "IN SNIPPETS OR CSV", "IN SNIPPETS OR CSV")
 library(rtweet)
 library(tidyverse)
 library(tidytext)
@@ -11,8 +11,8 @@ library(tweetscores) #Note that tweetscores could only be installed via the menu
 requestURL <- "https://api.twitter.com/oauth/request_token"
 accessURL <- "https://api.twitter.com/oauth/access_token"
 authURL <- "https://api.twitter.com/oauth/authorize"
-consumerKey <- "MitZ8CpsxQeeASr14J2mf5kE1" #1264943028478849029-7K7p01qyfBVY1JwdltQ2HQ50mXib2D
-consumerSecret <- "cXXoOIw3SEx2EV0D5SAZbdDff9jgIhOb8mS4W67nMzcS9F9zVZ"  #6gWPVfHFqkrHWxndGo0thNhtMnOxQngS8IwudxJjnqbG5
+consumerKey <- "IN SNIPPETS OR CSV" #IN SNIPPETS OR CSV
+consumerSecret <- "IN SNIPPETS OR CSV"  #IN SNIPPETS OR CSV
 my_oauth <- OAuthFactory$new(consumerKey=consumerKey, consumerSecret=consumerSecret, 
                              requestURL=requestURL, accessURL=accessURL, authURL=authURL)
 
@@ -30,8 +30,8 @@ oauth_endpoints("twitter")
 #
 #    Replace key and secret below
 myapp <- oauth_app("twitter",
-                   key = "MitZ8CpsxQeeASr14J2mf5kE1",
-                   secret = "cXXoOIw3SEx2EV0D5SAZbdDff9jgIhOb8mS4W67nMzcS9F9zVZ"
+                   key = "IN SNIPPETS OR CSV",
+                   secret = "IN SNIPPETS OR CSV"
 )
 
 # 3. Get OAuth credentials
@@ -49,10 +49,10 @@ content(req)
 ###Authorization using rtweet
 
 ## store api keys 
-api_key <- "MitZ8CpsxQeeASr14J2mf5kE1"
-api_secret_key <- "cXXoOIw3SEx2EV0D5SAZbdDff9jgIhOb8mS4W67nMzcS9F9zVZ"
-access_token <- "1264943028478849029-7K7p01qyfBVY1JwdltQ2HQ50mXib2D"
-access_token_secret <- "6gWPVfHFqkrHWxndGo0thNhtMnOxQngS8IwudxJjnqbG5"
+api_key <- "IN SNIPPETS OR CSV"
+api_secret_key <- "IN SNIPPETS OR CSV"
+access_token <- "IN SNIPPETS OR CSV"
+access_token_secret <- "IN SNIPPETS OR CSV"
 
 token <- create_token(
   app = "ideologystudy",
@@ -164,10 +164,104 @@ moral.dfm.tbl <- moral.dfm.tbl %>% mutate(id = as.numeric(document))
 tweets2016 <- moral.dfm.tbl %>% select(moral.count, moral.neg.count, moral.pos.count, id) %>%
   left_join(tweets2016, by = "id")
 
+
+
+
+##Emotions using tidytext
+
+emot.dic <- get_sentiments("nrc") #NRC emotions lexicon
+emot.dic <- as.dictionary(emot.dic)
+
+emot.dfm <- dfm(tweets2016.corpus, dictionary = emot.dic, remove = stopwords("english"), stem = TRUE, remove_punct = TRUE)
+
+emot.dfm.tbl <- as_tibble(emot.dfm)
+###These have the tweet ids, and so can be reconnected with the main file
+
+emot.dfm.tbl <- emot.dfm.tbl %>% mutate(id = as.numeric(document))
+tweets2016 <- emot.dfm.tbl %>%
+  left_join(tweets2016, by = "id")
+
+
 ###Basic dirty analysis
 tweets2016.unver <- subset(tweets2016, tweets2016$user_verified == "false")
+tweets2016.unver <- tweets2016.unver %>% mutate(incl.media = ifelse(media == "", 0, 1))
 
-model <- lm(retweet_count ~ moral.count + user_followers_count, data = tweets2016.unver)
+model <- lm(retweet_count ~ moral.neg.count + moral.pos.count + anger + anticip + disgust + fear + joy + sad + 
+              surpris + trust + user_followers_count + incl.media, data = tweets2016.unver)
 summary(model) #Data works (fyi no effect for moral.count)
 
+
+tweets2016.unver <- tweets2016.unver %>% mutate(anger.bin = ifelse(anger > 0, 1, 0))
+model2 <- glm(anger.bin ~ moral.neg.count + moral.pos.count +  user_followers_count + incl.media,
+              family = binomial(link="logit"), data = tweets2016.unver)
+summary(model2)
+
+library(stargazer)
+stargazer(model, model2, type = "html", out = "ssrc appendix models.html")
+
+##Make a sentiment analysis plot?
+
+##Sentiment analysis
+
+library(textdata)
+library(tidytext)
+
+tweets2016$stripped_text <- gsub("http.*","",  tweets2016$text)
+tweets2016$stripped_text <- gsub("https.*","", tweets2016$stripped_text) #Removes URLs
+
+tweets2016_clean <- tweets2016 %>%
+  dplyr::select(stripped_text) %>%
+  unnest_tokens(word, stripped_text) #Using token = "tweets" expands the data so that each row is one word from a tweet
+custom_stop_words <- bind_rows(tibble(word = c("trump", "vote", "gore", "election", "fraud"), 
+                                      lexicon = c("custom")), 
+                               stop_words)
+
+custom_stop_words
+
+# remove stop words from your list of words
+cleaned_tweet_words <- tweets2016_clean %>%
+  anti_join(custom_stop_words)
+
+
+# join sentiment classification to the tweet words
+nrc_word_counts <- cleaned_tweet_words %>%
+  inner_join(get_sentiments("nrc")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+nrc_word_counts %>%
+  group_by(sentiment) %>%
+  top_n(10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(title = "Sentiment during the 2013 flood event.",
+       y = "Contribution to sentiment",
+       x = NULL) +
+  coord_flip()
+
+###Users' locations
+tweets2016 <- tweets2016 %>% mutate(place2 = ifelse(as.character(place) == "", NA, as.character(place)))
+
+tweets2016 %>%
+  count(place2, sort = TRUE) %>%
+  mutate(place2 = reorder(place2,n)) %>%
+  na.omit() %>%
+  top_n(30) %>%
+  ggplot(aes(x = place2,y = n)) +
+  geom_col() +
+  coord_flip() +
+  labs(x = "Location",
+       y = "Count",
+       title = "Twitter users - unique locations ")
+
+###Bar plot
+
+sentiments <- data.frame(sentiment = c(rep("anger", 4700), rep("anticip", 2310), rep("disgust", 1617), rep("fear", 2839), rep("joy", 1422),
+                                       rep("sad", 2760), rep("surpris", 3209), rep("trust", 3122), rep("moral.count", 1434)))
+
+sent.plot <- ggplot(sentiments, aes(sentiment))
+sent.plot + geom_bar() + theme_bw()
 
