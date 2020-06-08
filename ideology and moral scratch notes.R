@@ -184,20 +184,39 @@ tweets2016 <- emot.dfm.tbl %>%
 
 ###Basic dirty analysis
 tweets2016.unver <- subset(tweets2016, tweets2016$user_verified == "false")
+
+#tweets2016 <- tweets2016 %>% mutate(verified.bin = ifelse(user_verified == "true", 1, 0))
 tweets2016.unver <- tweets2016.unver %>% mutate(incl.media = ifelse(media == "", 0, 1))
 
-model <- lm(retweet_count ~ moral.neg.count + moral.pos.count + anger + anticip + disgust + fear + joy + sad + 
-              surpris + trust + user_followers_count + incl.media, data = tweets2016.unver)
-summary(model) #Data works (fyi no effect for moral.count)
+model.moral <- lm(retweet_count ~ moral.neg.count + moral.pos.count + user_followers_count + incl.media, data = tweets2016.unver)
+summary(model.moral) #Data works (fyi no effect for moral.count)
 
+model.emotional <- lm(retweet_count ~ + anger + anticip + disgust + fear + joy + sad + 
+                        surpris + trust +   user_followers_count + incl.media, data = tweets2016.unver)
+summary(model.emotional)
 
-tweets2016.unver <- tweets2016.unver %>% mutate(anger.bin = ifelse(anger > 0, 1, 0))
-model2 <- glm(anger.bin ~ moral.neg.count + moral.pos.count +  user_followers_count + incl.media,
-              family = binomial(link="logit"), data = tweets2016.unver)
-summary(model2)
+model.all <- lm(retweet_count ~ moral.neg.count + moral.pos.count + anger + anticip + disgust + fear + joy + sad + 
+                        surpris + trust +  user_followers_count + incl.media, data = tweets2016.unver)
+summary(model.all)
+
+###Poisson
+model.moral.p <- glm(retweet_count ~ moral.neg.count + moral.pos.count + user_followers_count + incl.media,
+                     family = "quasipoisson", data = tweets2016.unver)
+summary(model.moral.p) #Data works (fyi no effect for moral.count)
+
+model.emotional.p <- glm(retweet_count ~ + anger + anticip + disgust + fear + joy + sad + 
+                        surpris + trust +   user_followers_count + incl.media,
+                        family = "quasipoisson", data = tweets2016.unver)
+summary(model.emotional.p)
+
+model.all.p <- glm(retweet_count ~ moral.neg.count + moral.pos.count + anger + anticip + disgust + fear + joy + sad + 
+                  surpris + trust +  user_followers_count + incl.media,
+                  family = "quasipoisson", data = tweets2016.unver)
+summary(model.all.p)
+
 
 library(stargazer)
-stargazer(model, model2, type = "html", out = "ssrc appendix models.html")
+stargazer(model.moral.p, model.emotional.p, model.all.p, type = "html", out = "ssrc appendix models.html")
 
 ##Make a sentiment analysis plot?
 
